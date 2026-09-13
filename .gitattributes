@@ -1,0 +1,8 @@
+# CV2ZMX.seq 是 GBK + CRLF, CODE V 要 CRLF 行尾。
+# 这里把行尾钉死, 免得在别的机器上 clone 出来变成 LF。
+# (GBK 的后续字节不会取到 0x0D, 所以行尾归一化不会破坏中文注释)
+
+* text=auto eol=lf
+*.seq  text eol=crlf
+*.DAT  text eol=crlf
+*.txt  text eol=crlf

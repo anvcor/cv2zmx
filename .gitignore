@@ -1,0 +1,16 @@
+# Allowlist. 默认忽略一切, 只放行工具本身的文件。
+#
+# 这个目录同时也是 CODE V 的工作目录, 里面会有 .len / .env / .zmx / .seq
+# 镜头数据和 codev*.rec / hdf*.tmp 之类的临时文件 —— 那些都是设计数据,
+# 一条也不能进仓库。用"先全忽略再逐个放行"而不是逐条 ignore, 就是为了
+# 以后往这个目录里丢新文件时不会漏。
+
+*
+
+!.gitignore
+!.gitattributes
+!README.md
+!CV2ZMX.seq
+!CV2ZMX_GLASS.DAT
+!CV2ZMX_GLASS_UNMATCHED.txt
+!make_glass_table.py
