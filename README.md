@@ -106,10 +106,42 @@ Zemax 的 Even Asphere 只到 **r¹⁶**（PARM 1…8 = r², r⁴ … r¹⁶）�
 所以：
 
 - H = J = 0 → `EVENASPH`，PARM1 = 0，PARM2…8 = A…G
-- H 或 J 非零 → `XASPHERE`（Extended Asphere），
-  `XDAT 1` = 项数 10，`XDAT 2` = 归一化半径 1.0，`XDAT 3…12` = r², r⁴ … r²⁰ 的系数
+- H 或 J 非零 → `XASPHERE`（Extended Asphere），系数改放 Extra Data：
 
-归一化半径取 1.0，系数就跟 CODE V 一一对应，不用再换算。
+```
+  TYPE XASPHERE
+  CURV …                                    ← 与 Even Asphere 同一个基准面
+  XDAT 1  1.000000000000E+01 0 0 1.000000000000E+00 0.000000000000E+00 0 ""   项数 N = 10
+  XDAT 2  1.000000000000E+00 …                                                 归一化半径 Rn = 1
+  XDAT 3  0.000000000000E+00 …                                                 r² 项，恒 0
+  XDAT 4…12  = A B C D E F G H J  （r⁴ r⁶ r⁸ r¹⁰ r¹² r¹⁴ r¹⁶ r¹⁸ r²⁰）
+  CONI …                                    ← conic 照常写
+```
+
+两种面型的式子同源，`CURV` / `CONI` 写法完全一样，只是多项式从 Lens Data 的 `PARM`
+搬到了 Extra Data 的 `XDAT`：
+
+```
+z = c·r² / (1 + √(1 − (1+k)·c²·r²)) + Σᵢ αᵢ·(r/Rn)^(2i)
+```
+
+**三条会把镜头悄悄改掉的地方：**
+
+1. **`XDAT 2`（Norm Radius）保持 1.0。** 取 1 时 αᵢ 就跟 CODE V 的 A…J 一一对应；
+   改成别的值（比如净口径），每个系数都要乘 `Rn^(2i)`，漏乘就是另一只镜头。
+2. **`XDAT 3`（r² 项）保持 0。** 它等价于改曲率 —— 非零会直接改掉近轴光焦度，EFL 对不上。
+   CODE V 的 `ASP` 从 A(r⁴) 起，本来就没有这一项。
+3. **`XDAT 1` 是项数，填 10。** 填小了等于把高次项截掉，又回到「装不下」那个问题。
+   校验的时候数一下 XDAT 行数，应当是 **12**（2 个设置 + 10 个系数）。
+
+另外记住 **XASPHERE 的系数在 Extra Data Editor 里，不在 Lens Data Editor**：
+设变量、做公差、写多重结构操作数时引用的列跟 Even Asphere 不是一回事；
+它还是迭代求交，追迹比 EVENASPH 慢一些 —— 所以默认 `^opt_asp = 0` 是**逐面**判断，
+只有真正用到 r¹⁸/r²⁰ 的面才换过去。
+
+> 这套 XDAT 排布是从 OpticStudio 自己存出来的文件反查的，横跨多个版本
+> （VERS 221221 / 240529 / 241210 的镜头文件各有实例），`XDAT 1` 恒为 10、
+> `XDAT 2` 恒为 1、`XDAT 3` 恒为 0，与本宏的写法逐字一致。
 
 ### 玻璃
 
