@@ -27,7 +27,7 @@
 | `make_glass_table.py` | — | 生成上表的脚本，两边玻璃库更新后重跑 |
 | `CV2ZMX_GLASS_UNMATCHED.txt` | — | Zemax 目录里找不到对应牌号的 CODE V 玻璃清单（多为停产牌号） |
 | `web/zmx2seq.js` | ✅ zmx2seq | 转换器本体（Zemax → CODE V），一个没有依赖的 JS 模块，网页和命令行共用 |
-| `web/index.html` `web/app.js` | — | 网页界面 |
+| `web/index.html` `web/app.js` `web/zip.js` | — | 网页界面（拖入即转换） |
 | `tools/zmx2seq.mjs` | — | 命令行入口，可批量转换 |
 | `tools/build-site.mjs` `tools/serve.mjs` | — | 组装网页 / 本地预览 |
 | `test/` | — | 自动测试和测试样本（手写的 `.zmx`，不是设计数据） |
@@ -250,12 +250,11 @@ OUT         = r"...\CV2ZMX_GLASS.DAT"
 
 ### 网页
 
-**<https://anvcor.github.io/cv2zmx/>**：拖入 `.zmx`，下载 `.seq`，可以一次放多个。转换全部在浏览器本地完成，文件不上传。
-每个文件除了 `.seq` 全文，还会给出：
+**<https://anvcor.github.io/cv2zmx/>**：把 `.zmx` 拖进去，自动下载 `.seq`；一次拖多个就打包成一个 `.zip`。
+转换全部在浏览器本地完成，文件不上传。网页不设选项，一律用下面的默认值；要改选项用命令行。
 
-- 警告清单（同样的内容写进 `.seq` 头部的 `!` 注释）；
-- **近轴核对**：每个结构的 EFL、近轴后焦、像面离焦、倍率、写出的孔径值，拿到 CODE V 里一比就知道有没有转错；
-- 面数据表、玻璃对照表（Zemax 牌号 → CODE V 牌号以及怎么来的）、结构 1 的剖面图。
+转不过去、需要核对的地方，网页上只显示条数（点开能看），同样的内容写在 `.seq` 开头的 `!` 注释里，
+注释里还有每个结构的近轴 EFL / BFL，拿到 CODE V 里一比就知道有没有转错。
 
 网页的发布是自动的：`.github/workflows/pages.yml` 每次推送都跑测试，推到 `main` 时组装网页并发布。
 **第一次要在仓库里开一下**：Settings → Pages → Build and deployment → Source 选 **GitHub Actions**。
@@ -270,22 +269,22 @@ node tools/zmx2seq.mjs *.zmx -d out                     # 批量
 node tools/zmx2seq.mjs lens.zmx -o E:\work\lens.seq --offset model
 ```
 
-只要 Node.js 18 以上，没有其它依赖。`--help` 列出全部选项，和网页上的选项一一对应。
+只要 Node.js 18 以上，没有其它依赖。`--help` 列出全部选项；不加选项时和网页的结果完全一样。
 玻璃映射表默认用仓库里的 `CV2ZMX_GLASS.DAT`，`--glass` 可以换。
 
-### 选项
+### 选项（命令行）
 
-| 网页 / 命令行 | 默认 | 含义 |
+| 命令行 | 默认（网页就用这些） | 含义 |
 |---|---|---|
-| 哪些半口径写成 CIR / `--sd` | `fixed` | `aperture` 只把口径（CLAP/FLAP）写成 CIR；`fixed` 再加上固定的半口径；`all` 所有半口径。CODE V 的 CIR 挡光，Zemax 的半口径不挡光，所以默认不碰自动半口径。宏导出的文件里 CIR 面正好是「固定半口径 + CLAP」，往返一致 |
-| Offset 玻璃 / `--offset` | `base` | `base` 写基准牌号（保留色散曲线，丢掉 Nd/Vd 偏移）；`model` 写模型玻璃（保留 nd/vd，丢掉色散曲线）。CODE V 没有 Offset 玻璃解 |
-| 映射表里没有的玻璃 / `--unknown` | `model` | `model` 按 GLAS 行里的 nd/vd 写模型玻璃；`guess` 按名字拼成 `牌号_厂家`。nd/vd 缺失或是老版本写的占位值 1.5/40 时一律猜名字，并提示核对 |
-| 位置求解 / `--no-oal` | 写 | `TOLE` → `THI Sk OAL …` |
-| 多重结构变量 / `--no-vars` | 写 | MCE 里状态为变量的 THIC → `ZOO THC 0`，其余 `100` |
-| 波长顺序 / `--keep-wave-order` | 从长到短 | CODE V 的习惯；`REF`、`WTW` 跟着重排 |
-| 视场顺序 / `--keep-field-order` | 轴上在前 | 按视场从小到大；渐晕和 `ZOO … F<i>` 跟着重排 |
-| 输出编码 / `--encoding` | `gbk` | 只有标题、标签里有中文时才有区别 |
-| 头部注释 / `--no-comments` | 写 | 来源、每个结构的近轴 EFL/BFL、全部警告（英文） |
+| `--sd aperture\|fixed\|all` | `fixed` | `aperture` 只把口径（CLAP/FLAP）写成 CIR；`fixed` 再加上固定的半口径；`all` 所有半口径。CODE V 的 CIR 挡光，Zemax 的半口径不挡光，所以默认不碰自动半口径。宏导出的文件里 CIR 面正好是「固定半口径 + CLAP」，往返一致 |
+| `--offset base\|model` | `base` | `base` 写基准牌号（保留色散曲线，丢掉 Nd/Vd 偏移）；`model` 写模型玻璃（保留 nd/vd，丢掉色散曲线）。CODE V 没有 Offset 玻璃解 |
+| `--unknown model\|guess` | `model` | `model` 按 GLAS 行里的 nd/vd 写模型玻璃；`guess` 按名字拼成 `牌号_厂家`。nd/vd 缺失或是老版本写的占位值 1.5/40 时一律猜名字，并提示核对 |
+| `--no-oal` | 写 | `TOLE` → `THI Sk OAL …` |
+| `--no-vars` | 写 | MCE 里状态为变量的 THIC → `ZOO THC 0`，其余 `100` |
+| `--keep-wave-order` | 从长到短 | CODE V 的习惯；`REF`、`WTW` 跟着重排 |
+| `--keep-field-order` | 轴上在前 | 按视场从小到大；渐晕和 `ZOO … F<i>` 跟着重排 |
+| `--encoding gbk\|utf-8` | `gbk` | 只有标题、标签里有中文时才有区别 |
+| `--no-comments` | 写 | 来源、每个结构的近轴 EFL/BFL、全部警告（英文） |
 
 ### 换算（宏的逆运算）
 
@@ -331,7 +330,7 @@ node tools/zmx2seq.mjs lens.zmx -o E:\work\lens.seq --offset model
 
 ### 已验证
 
-- `npm test`：17 项自动测试。样本有宏导出格式的 3 档变焦、OpticStudio 格式的对焦镜头（近轴工作 F/#、
+- `npm test`：19 项自动测试。样本有宏导出格式的 3 档变焦、OpticStudio 格式的对焦镜头（近轴工作 F/#、
   位置求解、Offset / 模型玻璃、UTF-16 编码）、特殊面型（SPS ODD、坐标断点、反射镜、DOE、口径），
   旧版没有 `TYPE` 行的文件，以及 GBK 中文标题。
 - **往返**：变焦样本 → zmx2seq → `seq2zmx.py`（另一套独立写的 CODE V `.seq` → `.zmx` 脚本）→ 与原 `.zmx` 比对，
@@ -341,8 +340,7 @@ node tools/zmx2seq.mjs lens.zmx -o E:\work\lens.seq --offset model
   EFL、BFL、F 数、入瞳完全相同。其余差异都来自 rayoptics 自己的玻璃库（例如它的 SCHOTT 目录没有老牌号 BK7）。
 
 **还没在 CODE V 里打开验证过。** 第一次用的时候请拿一个熟悉的镜头试一下：
-网页的「近轴核对」和 `.seq` 头部注释里都有每个结构的 EFL / BFL，和 CODE V 的一阶数据直接对；
-再看一眼多重结构和渐晕。
+`.seq` 头部注释里有每个结构的 EFL / BFL，和 CODE V 的一阶数据直接对；再看一眼多重结构和渐晕。
 
 ## 文件编码
 

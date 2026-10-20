@@ -497,7 +497,7 @@ export function convertZmx(text, options = {}) {
           `S${sIdx}: offset glass ${name} (dNd ${glas.dn}, dVd ${glas.dv}) written as model glass ${r.tok}.`);
       } else {
         r = { kind: 'offset-base', tok: hit.row.cv, nd, vd, cv: hit.row.cv };
-        log.warn(`面 ${sIdx} 是 Offset 玻璃，CODE V 没有这个功能，只写了基准玻璃 ${hit.row.cv}，Nd ${glas.dn >= 0 ? '+' : ''}${glas.dn} / Vd ${glas.dv >= 0 ? '+' : ''}${glas.dv} 的偏移丢了（要保住 nd/vd 就把“Offset 玻璃”选成模型玻璃）。`,
+        log.warn(`面 ${sIdx} 是 Offset 玻璃，CODE V 没有这个功能，只写了基准玻璃 ${hit.row.cv}，Nd ${glas.dn >= 0 ? '+' : ''}${glas.dn} / Vd ${glas.dv >= 0 ? '+' : ''}${glas.dv} 的偏移丢了（要保住 nd/vd，用命令行加 --offset model 写成模型玻璃）。`,
           `S${sIdx}: offset glass written as its base glass ${hit.row.cv}; offsets dNd ${glas.dn} / dVd ${glas.dv} are lost.`);
       }
     } else {
