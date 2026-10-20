@@ -4,6 +4,10 @@
 # 镜头数据和 codev*.rec / hdf*.tmp 之类的临时文件 —— 那些都是设计数据,
 # 一条也不能进仓库。用"先全忽略再逐个放行"而不是逐条 ignore, 就是为了
 # 以后往这个目录里丢新文件时不会漏。
+#
+# 子目录整个放行: web/ (网页), tools/ (命令行), test/ (测试, 里面的 .zmx
+# 是手写的测试样本, 不是设计数据), .github/ (自动测试和网页发布)。
+# 生成的 _site/ 不放行。
 
 *
 
@@ -14,3 +18,13 @@
 !CV2ZMX_GLASS.DAT
 !CV2ZMX_GLASS_UNMATCHED.txt
 !make_glass_table.py
+!package.json
+
+!web/
+!web/**
+!tools/
+!tools/**
+!test/
+!test/**
+!.github/
+!.github/**

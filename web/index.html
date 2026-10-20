@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CV2ZMX 镜头转换</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="把 Zemax OpticStudio 的 .zmx 拖进来，自动下载 CODE V 的 .seq。转换在浏览器本地完成。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M12 3c-5 7-5 19 0 26h4c5-7 5-19 0-26z' fill='%231D6F8F'/%3E%3Cpath d='M2 16h28' stroke='%2317212B' stroke-width='2' stroke-dasharray='3 2'/%3E%3C/svg%3E">
+<style>
+/* Layout: one narrow column — a large drop target, then one line per converted file. */
+:root {
+  --bg: #F2F4F6;
+  --panel: #FFFFFF;
+  --ink: #17212B;
+  --ink-2: #56636F;
+  --line: #D6DDE4;
+  --glass: #1D6F8F;
+  --glass-tint: #D8ECF4;
+  --glass-edge: #6FA9C0;
+  --warn: #9A5800;
+  --bad: #B3261E;
+  --font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "JetBrains Mono", "Noto Sans Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1318; --panel: #151C23; --ink: #DCE4EB; --ink-2: #95A4B2; --line: #27323C;
+    --glass: #62C1DE; --glass-tint: #173847; --glass-edge: #3E7F98; --warn: #F2B35C; --bad: #F28B82;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1318; --panel: #151C23; --ink: #DCE4EB; --ink-2: #95A4B2; --line: #27323C;
+  --glass: #62C1DE; --glass-tint: #173847; --glass-edge: #3E7F98; --warn: #F2B35C; --bad: #F28B82;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 var(--font-ui); }
+main { max-width: 680px; margin: 0 auto; padding-block: 48px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+a { color: var(--glass); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--glass); outline-offset: 2px; }
+
+h1 { margin: 0; font-size: clamp(22px, 4vw, 28px); line-height: 1.25; text-wrap: balance; }
+h1 .ext { font-family: var(--font-mono); color: var(--glass); font-weight: 600; }
+.lead { margin: -8px 0 0; color: var(--ink-2); }
+
+.drop { display: grid; place-items: center; align-content: center; gap: 8px; min-height: 230px; padding: 24px 16px; text-align: center;
+  border: 2px dashed var(--glass-edge); border-radius: 10px; background: var(--panel); cursor: pointer; transition: background .15s, border-color .15s; }
+.drop:hover, .drop.over { background: var(--glass-tint); border-color: var(--glass); }
+.drop svg { width: 64px; height: 42px; }
+.drop strong { font-size: 18px; }
+.drop span { color: var(--ink-2); font-size: 13px; }
+.notice { margin: 0; font-size: 13px; color: var(--bad); }
+
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.row { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
+.names { font-family: var(--font-mono); font-size: 14px; word-break: break-all; }
+.names .from { color: var(--ink-2); }
+.sub { grid-column: 1 / -1; font-size: 13px; color: var(--ink-2); }
+.sub details { display: inline; }
+.sub summary { display: inline; cursor: pointer; color: var(--warn); }
+.sub ul { margin: 6px 0 2px; padding-left: 18px; color: var(--ink); display: grid; gap: 2px; }
+.row.err .sub { color: var(--bad); }
+.btn { border: 1px solid var(--glass); background: var(--glass); color: var(--panel); border-radius: 6px; padding: 4px 14px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
+.btn:hover { filter: brightness(1.08); }
+.btn.all { justify-self: start; background: var(--panel); color: var(--glass); }
+
+footer { font-size: 12px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 14px; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--panel); padding: 8px 16px; border-radius: 6px; font-size: 13px; max-width: calc(100% - 32px); z-index: 20; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Zemax <span class="ext">.zmx</span> → CODE V <span class="ext">.seq</span></h1>
+  <p class="lead">把镜头文件拖进来，自动下载转换好的 .seq。文件只在你的浏览器里处理，不会上传。</p>
+
+  <label id="drop" class="drop" for="file">
+    <svg viewBox="0 0 64 42" aria-hidden="true"><path d="M24 3c-8 11-8 25 0 36h7c8-11 8-25 0-36z" fill="var(--glass-tint)" stroke="var(--glass)" stroke-width="1.6"/><path d="M1 21h62" stroke="var(--ink-2)" stroke-dasharray="4 3"/><path d="M50 14l7 7-7 7" fill="none" stroke="var(--glass)" stroke-width="2"/></svg>
+    <strong>拖入 .zmx 文件</strong>
+    <span>或点击选择；可以一次放多个</span>
+    <input type="file" id="file" accept=".zmx,.ZMX" multiple hidden>
+  </label>
+  <p id="notice" class="notice" hidden></p>
+
+  <ul id="list" class="list" aria-live="polite"></ul>
+
+  <footer>
+    <span>反方向（CODE V → Zemax）用 CODE V 宏 CV2ZMX.seq · <a href="https://github.com/anvcor/cv2zmx#readme">说明</a></span>
+    <span>zmx2seq <span id="ver"></span></span>
+  </footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
