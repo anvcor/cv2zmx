@@ -1,0 +1,13 @@
+{
+  "name": "cv2zmx",
+  "private": true,
+  "description": "CODE V <-> Zemax lens file conversion: CV2ZMX.seq macro and the zmx2seq web/CLI converter",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "serve": "node tools/serve.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

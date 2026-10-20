@@ -6,3 +6,5 @@
 *.seq  text eol=crlf
 *.DAT  text eol=crlf
 *.txt  text eol=crlf
+# 测试样本按 CV2ZMX.seq 写出的样子保存（CRLF）；解析器 LF / CRLF 都认。
+*.zmx  text eol=crlf

@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CV2ZMX 镜头转换</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Zemax OpticStudio .zmx 转 CODE V .seq，在浏览器本地完成；反方向用 CV2ZMX.seq 宏。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M12 3c-5 7-5 19 0 26h4c5-7 5-19 0-26z' fill='%231D6F8F'/%3E%3Cpath d='M2 16h28' stroke='%2317212B' stroke-width='2' stroke-dasharray='3 2'/%3E%3C/svg%3E">
+<style>
+/* Layout: a two-pane optical bench — input and options on the left, the converted .seq with its checks on the right; one column below 960px. */
+:root {
+  --bg: #F2F4F6;
+  --panel: #FFFFFF;
+  --ink: #17212B;
+  --ink-2: #4D5B69;
+  --line: #D6DDE4;
+  --glass: #1D6F8F;
+  --glass-tint: #D8ECF4;
+  --glass-edge: #6FA9C0;
+  --warn: #9A5800;
+  --warn-bg: #FFF3DE;
+  --info: #3A5872;
+  --info-bg: #EAF0F6;
+  --bad: #B3261E;
+  --bad-bg: #FCE8E6;
+  --code-bg: #F7F9FB;
+  --font-ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "JetBrains Mono", "Noto Sans Mono", monospace;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1318; --panel: #151C23; --ink: #DCE4EB; --ink-2: #95A4B2; --line: #27323C;
+    --glass: #62C1DE; --glass-tint: #173847; --glass-edge: #3E7F98;
+    --warn: #F2B35C; --warn-bg: #2D2414; --info: #A3BED6; --info-bg: #172433;
+    --bad: #F28B82; --bad-bg: #3A1D1B; --code-bg: #10161C; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1318; --panel: #151C23; --ink: #DCE4EB; --ink-2: #95A4B2; --line: #27323C;
+  --glass: #62C1DE; --glass-tint: #173847; --glass-edge: #3E7F98;
+  --warn: #F2B35C; --warn-bg: #2D2414; --info: #A3BED6; --info-bg: #172433;
+  --bad: #F28B82; --bad-bg: #3A1D1B; --code-bg: #10161C; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 var(--font-ui); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+a { color: var(--glass); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--glass); outline-offset: 2px; }
+code, pre, .mono { font-family: var(--font-mono); }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; }
+
+/* top bar */
+.top { border-bottom: 1px solid var(--line); background: var(--panel); }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 10px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .04em; }
+.brand svg { width: 26px; height: 26px; }
+.top nav { display: flex; gap: 18px; flex-wrap: wrap; }
+.top nav a { color: var(--ink-2); text-decoration: none; }
+.top nav a:hover { color: var(--glass); }
+
+/* intro */
+.intro { padding-block: 28px 18px; }
+.intro h1 { font-size: clamp(22px, 3.2vw, 30px); margin: 0 0 8px; font-weight: 700; }
+.intro h1 .ext { font-family: var(--font-mono); color: var(--glass); font-weight: 600; }
+.intro p { margin: 0; max-width: 70ch; color: var(--ink-2); }
+
+/* bench */
+.bench { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 20px; align-items: start; padding-bottom: 32px; }
+@media (max-width: 960px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.side { display: grid; gap: 16px; position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)); }
+@media (max-width: 960px) { .side { position: static; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+
+.drop { display: grid; place-items: center; gap: 6px; text-align: center; padding: 26px 16px; border: 1.5px dashed var(--glass-edge); border-radius: var(--radius); background: var(--panel); cursor: pointer; transition: background .15s; }
+.drop:hover, .drop.over { background: var(--glass-tint); }
+.drop strong { font-size: 15px; }
+.drop span { color: var(--ink-2); font-size: 13px; }
+.drop svg { width: 46px; height: 30px; }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.examples button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 3px 12px; cursor: pointer; font-size: 13px; }
+.examples button:hover { border-color: var(--glass); color: var(--glass); }
+
+.opts { padding: 14px 16px; display: grid; gap: 14px; }
+.opts h2 { font-size: 13px; margin: 0; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-2); font-weight: 600; }
+.opt { display: grid; gap: 4px; }
+.opt > label, .opt > .lbl { font-weight: 600; font-size: 13px; }
+.opt select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.opt .hint { font-size: 12px; color: var(--ink-2); }
+.checks { display: grid; gap: 6px; }
+.checks label { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
+.checks input { margin-top: 3px; accent-color: var(--glass); }
+.glassmap { padding: 12px 16px; font-size: 13px; display: grid; gap: 6px; }
+.glassmap .status { display: flex; gap: 8px; align-items: center; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-2); flex: none; }
+.dot.ok { background: var(--glass); } .dot.bad { background: var(--bad); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--glass); cursor: pointer; text-decoration: underline; font-size: 13px; text-align: left; }
+
+/* results */
+.results { display: grid; gap: 20px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; overflow: hidden; }
+.card-h { display: flex; justify-content: space-between; gap: 12px 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; align-items: flex-start; }
+.card-h h2 { margin: 0; font-size: 17px; font-family: var(--font-mono); font-weight: 600; word-break: break-all; }
+.card-h .meta { margin: 2px 0 0; color: var(--ink-2); font-size: 13px; }
+.tag { display: inline-block; font-size: 11px; letter-spacing: .06em; padding: 0 7px; border-radius: 3px; background: var(--glass-tint); color: var(--glass); margin-left: 8px; vertical-align: 2px; font-family: var(--font-ui); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 4px; padding: 6px 14px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.btn:hover { border-color: var(--glass); }
+.btn.primary { background: var(--glass); border-color: var(--glass); color: var(--panel); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { font-weight: 400; color: var(--ink-2); }
+.card-b { padding: 16px 18px 18px; display: grid; gap: 18px; min-width: 0; }
+
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; }
+.facts div { display: grid; }
+.facts dt { font-size: 11px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .07em; }
+.facts dd { margin: 0; font-family: var(--font-mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+
+.notes { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.notes li { padding: 7px 12px 7px 14px; border-left: 3px solid var(--info); background: var(--info-bg); border-radius: 0 4px 4px 0; font-size: 13px; }
+.notes li.warn { border-color: var(--warn); background: var(--warn-bg); }
+.notes li.error { border-color: var(--bad); background: var(--bad-bg); }
+.notes .lvl { font-weight: 700; margin-right: 6px; }
+.notes li.warn .lvl { color: var(--warn); } .notes li.info .lvl { color: var(--info); } .notes li.error .lvl { color: var(--bad); }
+.clean { font-size: 13px; color: var(--ink-2); }
+
+.split { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 18px; align-items: start; }
+@media (max-width: 1280px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.figure { margin: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--code-bg); padding: 8px; min-width: 0; }
+.figure svg { display: block; width: 100%; height: auto; max-height: 260px; }
+.figure figcaption { font-size: 12px; color: var(--ink-2); padding: 4px 4px 0; }
+.lens-fill { fill: var(--glass-tint); stroke: var(--glass); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.surf-line { fill: none; stroke: var(--glass); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.axis { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; opacity: .6; }
+.stop-mark { stroke: var(--ink); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.img-plane { stroke: var(--ink-2); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.fig-label { fill: var(--ink-2); font: 11px var(--font-ui); }
+
+.tbl-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 5px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); font-weight: 600; }
+td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+td.mono { font-family: var(--font-mono); }
+tr.stop td:first-child::after { content: " STO"; font-size: 10px; color: var(--glass); font-weight: 700; }
+.kind { font-size: 11px; padding: 0 6px; border-radius: 3px; background: var(--info-bg); color: var(--info); }
+.kind.warn { background: var(--warn-bg); color: var(--warn); }
+
+details { border-top: 1px solid var(--line); padding-top: 10px; min-width: 0; }
+details > summary { cursor: pointer; font-weight: 600; font-size: 14px; list-style-position: outside; }
+details > summary .count { color: var(--ink-2); font-weight: 400; margin-left: 6px; }
+details[open] > summary { margin-bottom: 10px; }
+pre.seq { margin: 0; max-height: 520px; overflow: auto; padding: 12px 14px; background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--radius); font-size: 12.5px; line-height: 1.55; tab-size: 4; }
+pre.seq .c { color: var(--ink-2); }
+pre.seq .k { color: var(--glass); font-weight: 600; }
+pre.seq .w { color: var(--warn); }
+
+.err-card .card-b { color: var(--bad); }
+.empty { padding: 28px; text-align: center; color: var(--ink-2); }
+
+/* reference sections */
+.ref { padding-block: 8px 40px; display: grid; gap: 20px; }
+.ref section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; min-width: 0; }
+.ref h2 { margin: 0 0 6px; font-size: 18px; }
+.ref p { margin: 6px 0; max-width: 72ch; color: var(--ink-2); }
+.ref ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; max-width: 80ch; }
+.ref code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-size: 12.5px; }
+.ref .downloads { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.ref .downloads a { text-decoration: none; }
+.map td:first-child, .map td:nth-child(2) { font-family: var(--font-mono); }
+.map td { white-space: normal; vertical-align: top; }
+.map td:nth-child(3) { color: var(--ink-2); min-width: 16ch; }
+
+footer { border-top: 1px solid var(--line); color: var(--ink-2); font-size: 12px; }
+footer .wrap { padding-block: 16px; display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--panel); padding: 8px 16px; border-radius: 4px; font-size: 13px; max-width: calc(100% - 32px); z-index: 20; }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: rise .2s ease-out; } @keyframes rise { from { transform: translate(-50%, 8px); opacity: 0; } } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M12 3c-5 7-5 19 0 26h4c5-7 5-19 0-26z" fill="var(--glass-tint)" stroke="var(--glass)" stroke-width="1.5"/><path d="M1 16h30" stroke="var(--ink-2)" stroke-width="1.2" stroke-dasharray="3 2"/></svg>
+      CV2ZMX
+    </div>
+    <nav aria-label="页面导航">
+      <a href="#convert">ZMX → SEQ</a>
+      <a href="#macro">CODE V → ZMX</a>
+      <a href="#mapping">对应关系</a>
+      <a href="https://github.com/anvcor/cv2zmx">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="convert">
+  <div class="wrap intro">
+    <h1>Zemax <span class="ext">.zmx</span> → CODE V <span class="ext">.seq</span></h1>
+    <p>把 OpticStudio 的镜头文件转成 CODE V 序列文件。玻璃牌号、非球面、渐晕、变焦和对焦的多重结构都按两边的定义换算，转不过去的内容逐条列出，也写进 .seq 文件头的注释里。转换全部在浏览器里完成，文件不会上传。</p>
+  </div>
+
+  <div class="wrap bench">
+    <aside class="side">
+      <label id="drop" class="drop" for="file">
+        <svg viewBox="0 0 46 30" aria-hidden="true"><path d="M17 2c-6 8-6 18 0 26h5c6-8 6-18 0-26z" fill="var(--glass-tint)" stroke="var(--glass)" stroke-width="1.4"/><path d="M1 15h44" stroke="var(--ink-2)" stroke-dasharray="3 2"/><path d="M35 10l5 5-5 5" fill="none" stroke="var(--glass)" stroke-width="1.6"/></svg>
+        <strong>拖入 .zmx 文件，或点击选择</strong>
+        <span>可以一次放多个；UTF-16、UTF-8、GBK 编码都能读</span>
+        <input type="file" id="file" accept=".zmx,.ZMX" multiple hidden>
+      </label>
+      <div class="examples">
+        示例：
+        <button type="button" data-example="zoom_macro.zmx">3 档变焦（CV2ZMX 宏导出）</button>
+        <button type="button" data-example="focus_pwfn.zmx">对焦镜头（OpticStudio）</button>
+        <button type="button" data-example="special_surfaces.zmx">特殊面型</button>
+      </div>
+
+      <form id="opts" class="panel opts" autocomplete="off">
+        <h2>转换选项</h2>
+        <div class="opt">
+          <label for="opt-sd">哪些半口径写成 CIR</label>
+          <select id="opt-sd" name="sd">
+            <option value="fixed">口径（CLAP/FLAP）＋固定的半口径</option>
+            <option value="aperture">只写口径（CLAP/FLAP）</option>
+            <option value="all">所有半口径</option>
+          </select>
+          <span class="hint">CODE V 的 CIR 会挡光；Zemax 的半口径不挡光，只有口径才挡。</span>
+        </div>
+        <div class="opt">
+          <label for="opt-offset">Offset 玻璃（基准牌号＋Nd/Vd 偏移）</label>
+          <select id="opt-offset" name="offsetGlass">
+            <option value="base">写基准牌号（保留色散曲线，丢掉偏移）</option>
+            <option value="model">写模型玻璃（保留 nd/vd，丢掉色散曲线）</option>
+          </select>
+        </div>
+        <div class="opt">
+          <label for="opt-unknown">映射表里找不到的玻璃</label>
+          <select id="opt-unknown" name="unknownGlass">
+            <option value="model">按文件里的 nd/vd 写模型玻璃</option>
+            <option value="guess">按名字猜 CODE V 牌号</option>
+          </select>
+        </div>
+        <div class="opt">
+          <label for="opt-enc">输出编码（有中文时）</label>
+          <select id="opt-enc" name="encoding">
+            <option value="gbk">GBK（中文 Windows 上的 CODE V）</option>
+            <option value="utf-8">UTF-8</option>
+          </select>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="opt-oal" name="oal" checked> 位置求解写成 <code>THI … OAL</code></label>
+          <label><input type="checkbox" id="opt-vars" name="zoomVars" checked> 多重结构里的厚度变量写成 <code>ZOO THC 0</code></label>
+          <label><input type="checkbox" id="opt-wave" name="waveOrder" checked> 波长按 CODE V 习惯从长到短排</label>
+          <label><input type="checkbox" id="opt-field" name="fieldOrder" checked> 视场从轴上排起（F1 = 轴上）</label>
+          <label><input type="checkbox" id="opt-comments" name="comments" checked> 文件头写来源、近轴核对和警告注释</label>
+        </div>
+      </form>
+
+      <div class="panel glassmap">
+        <div class="status"><span id="gm-dot" class="dot"></span><span id="gm-text">正在加载玻璃映射表…</span></div>
+        <label class="linkbtn" for="gm-file">换成自己的 CV2ZMX_GLASS.DAT</label>
+        <input type="file" id="gm-file" accept=".dat,.DAT,.txt" hidden>
+      </div>
+    </aside>
+
+    <section class="results" id="results" aria-live="polite">
+      <div class="card empty">正在载入示例…</div>
+    </section>
+  </div>
+
+  <div class="wrap ref">
+    <section id="macro">
+      <h2>反方向：CODE V → Zemax</h2>
+      <p>浏览器读不了 CODE V 的镜头数据库，所以 CODE V → Zemax 这一边用宏 <code>CV2ZMX.seq</code>，在 CODE V 里直接写出 <code>.zmx</code>，不经过 Zemax 的 .seq 导入器。</p>
+      <ol>
+        <li>下载 <code>CV2ZMX.seq</code> 和 <code>CV2ZMX_GLASS.DAT</code>，放在同一台电脑的任意目录。</li>
+        <li>打开 <code>CV2ZMX.seq</code>，把顶部 Settings 区的 <code>^gtable</code> 改成 <code>CV2ZMX_GLASS.DAT</code> 的完整路径。</li>
+        <li>在 CODE V 命令行运行 <code>in E:\tools\cv2zmx\CV2ZMX 输出文件名</code>，结果写在 CODE V 当前工作目录。</li>
+      </ol>
+      <div class="downloads">
+        <a class="btn" href="CV2ZMX.seq" download>下载 CV2ZMX.seq</a>
+        <a class="btn" href="CV2ZMX_GLASS.DAT" download>下载 CV2ZMX_GLASS.DAT</a>
+        <a class="btn ghost" href="https://github.com/anvcor/cv2zmx#readme">完整说明</a>
+      </div>
+    </section>
+
+    <section id="mapping">
+      <h2>对应关系</h2>
+      <p>每一行都是 CV2ZMX 宏的逆运算，两个方向用同一套公式。</p>
+      <div class="tbl-wrap">
+        <table class="map">
+          <thead><tr><th>Zemax .zmx</th><th>CODE V .seq</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>VDY / VCY, VDX / VCX</td><td>VUY = VCY − VDY<br>VLY = VCY + VDY</td><td>Zemax 说剩下的光瞳在哪、多宽；CODE V 说上下各切掉多少。X 方向同理。</td></tr>
+            <tr><td>FNUM v 1（近轴工作 F/#）</td><td>FNO，有限共轭 FNO² = PWFN² + (β/2)²</td><td>两边入瞳一致；无限远时数值不变。</td></tr>
+            <tr><td>FNUM v 0（像方 F/#）</td><td>FNO；有限共轭改写 EPD = EFL / F#</td><td>像方 F/# 按无限远共轭定义，CODE V 的 FNO 是工作 F 数。</td></tr>
+            <tr><td>ENPD / OBNA / FLOA</td><td>EPD / NAO / 由光阑半口径换算</td><td></td></tr>
+            <tr><td>EVENASPH PARM 2…8</td><td>ASP：A B C D E F G</td><td>r⁴ … r¹⁶。CONI 就是 K。</td></tr>
+            <tr><td>XASPHERE XDAT 4…12</td><td>ASP：A … J（到 r²⁰）</td><td>归一化半径 Rn ≠ 1 时系数除以 Rn²ⁱ。</td></tr>
+            <tr><td>r² 项、奇次项、r²⁰ 以上</td><td>SPS ODD（C1 = K，C(n+1) = rⁿ）</td><td>ASP 放不下时才用，会提示核对。</td></tr>
+            <tr><td>BINARY_2</td><td>DIF DOE，HCO Cj = Aj·λ0/2π</td><td>λ0 取主波长，会提示核对焦距。</td></tr>
+            <tr><td>GLAS 牌号</td><td>牌号_厂家（CV2ZMX_GLASS.DAT 反查）</td><td>同名牌号按 GCAT 里的目录取舍，例如 D-QK3L → DQK3L_CDGM。</td></tr>
+            <tr><td>GLAS ___BLANK nd vd</td><td>模型玻璃 nnnnnn.vvvv</td><td>例如 1.5168 / 64.17 → 516800.6417。</td></tr>
+            <tr><td>MIRROR / COORDBRK</td><td>REFL / 哑面＋XDE YDE ADE BDE CDE</td><td>倾斜方向请在 CODE V 里画图核对。</td></tr>
+            <tr><td>CLAP、FLAP、固定半口径 / OBSC</td><td>CIR / CIR OBS</td><td>非圆形口径不转换，会列出来。</td></tr>
+            <tr><td>TOLE from len（位置求解）</td><td>THI Sk OAL Sfrom..k+1 len</td><td>该面不再写 ZOO THI，否则会覆盖求解。</td></tr>
+            <tr><td>MNUM + MCE（THIC CRVT CONN PRAM EDVA APER YFIE FVDY …）</td><td>ZOO n + ZOO THI / CUY / K / A… / FNO / YAN / VUY …</td><td>变量状态写成 ZOO THC 0，其余 100。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>CV2ZMX · zmx2seq <span id="ver"></span> · 文件只在本机浏览器里处理</span>
+    <a href="https://github.com/anvcor/cv2zmx">github.com/anvcor/cv2zmx</a>
+  </div>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
