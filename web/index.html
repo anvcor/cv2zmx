@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CV2ZMX 镜头转换</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="把 Zemax OpticStudio 的 .zmx 拖进来，自动下载 CODE V 的 .seq。转换在浏览器本地完成。">
+<meta name="description" content="Zemax .zmx 和 CODE V .seq 互相转换：把镜头文件拖进来，自动下载另一种格式。转换在浏览器本地完成。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M12 3c-5 7-5 19 0 26h4c5-7 5-19 0-26z' fill='%231D6F8F'/%3E%3Cpath d='M2 16h28' stroke='%2317212B' stroke-width='2' stroke-dasharray='3 2'/%3E%3C/svg%3E">
 <style>
 /* Layout: one narrow column — a large drop target, then one line per converted file. */
@@ -44,6 +44,7 @@ button { font: inherit; color: inherit; }
 
 h1 { margin: 0; font-size: clamp(22px, 4vw, 28px); line-height: 1.25; text-wrap: balance; }
 h1 .ext { font-family: var(--font-mono); color: var(--glass); font-weight: 600; }
+h1 .arrow { color: var(--ink-2); font-weight: 400; margin: 0 .1em; }
 .lead { margin: -8px 0 0; color: var(--ink-2); }
 
 .drop { display: grid; place-items: center; align-content: center; gap: 8px; min-height: 230px; padding: 24px 16px; text-align: center;
@@ -74,22 +75,22 @@ footer { font-size: 12px; color: var(--ink-2); display: flex; flex-wrap: wrap; g
 </head>
 <body>
 <main>
-  <h1>Zemax <span class="ext">.zmx</span> → CODE V <span class="ext">.seq</span></h1>
-  <p class="lead">把镜头文件拖进来，自动下载转换好的 .seq。文件只在你的浏览器里处理，不会上传。</p>
+  <h1>Zemax <span class="ext">.zmx</span> <span class="arrow" aria-label="互转">↔</span> CODE V <span class="ext">.seq</span></h1>
+  <p class="lead">把镜头文件拖进来，自动下载转换好的文件：.zmx 变 .seq，.seq 变 .zmx。文件只在你的浏览器里处理，不会上传。</p>
 
   <label id="drop" class="drop" for="file">
-    <svg viewBox="0 0 64 42" aria-hidden="true"><path d="M24 3c-8 11-8 25 0 36h7c8-11 8-25 0-36z" fill="var(--glass-tint)" stroke="var(--glass)" stroke-width="1.6"/><path d="M1 21h62" stroke="var(--ink-2)" stroke-dasharray="4 3"/><path d="M50 14l7 7-7 7" fill="none" stroke="var(--glass)" stroke-width="2"/></svg>
-    <strong>拖入 .zmx 文件</strong>
-    <span>或点击选择；可以一次放多个</span>
-    <input type="file" id="file" accept=".zmx,.ZMX" multiple hidden>
+    <svg viewBox="0 0 64 42" aria-hidden="true"><path d="M24 3c-8 11-8 25 0 36h7c8-11 8-25 0-36z" fill="var(--glass-tint)" stroke="var(--glass)" stroke-width="1.6"/><path d="M1 21h62" stroke="var(--ink-2)" stroke-dasharray="4 3"/><path d="M50 14l7 7-7 7M14 14l-7 7 7 7" fill="none" stroke="var(--glass)" stroke-width="2"/></svg>
+    <strong>拖入 .zmx 或 .seq 文件</strong>
+    <span>或点击选择；可以一次放多个，两种混在一起也行</span>
+    <input type="file" id="file" accept=".zmx,.ZMX,.seq,.SEQ" multiple hidden>
   </label>
   <p id="notice" class="notice" hidden></p>
 
   <ul id="list" class="list" aria-live="polite"></ul>
 
   <footer>
-    <span>反方向（CODE V → Zemax）用 CODE V 宏 CV2ZMX.seq · <a href="https://github.com/anvcor/cv2zmx#readme">说明</a></span>
-    <span>zmx2seq <span id="ver"></span></span>
+    <span>装了 CODE V 也可以用宏 CV2ZMX.seq 直接导出 .zmx · <a href="https://github.com/anvcor/cv2zmx#readme">说明</a></span>
+    <span id="ver"></span>
   </footer>
 </main>
 <script type="module" src="app.js"></script>

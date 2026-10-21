@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Assemble the GitHub Pages site into _site/ (used by .github/workflows/pages.yml and `npm run serve`).
 //
-//   _site/index.html, app.js, zmx2seq.js   ← web/
+//   _site/index.html, app.js, zmx2seq.js, seq2zmx.js, zip.js   ← web/
 //   _site/CV2ZMX_GLASS.DAT, CV2ZMX.seq     ← repository root (downloadable from the site as well)
 
 import { cpSync, mkdirSync, rmSync, readdirSync, writeFileSync } from 'node:fs';

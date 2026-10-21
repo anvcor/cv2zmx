@@ -1,11 +1,30 @@
-// Drop .zmx files, get .seq files. Default conversion options; the CLI has the switches.
-// Everything runs locally; files never leave the browser.
+// Drop .zmx files to get .seq files, drop .seq files to get .zmx files. Default conversion
+// options; the CLIs have the switches. Everything runs locally; files never leave the browser.
 import { convertBytes, parseGlassTable, encodeText, ConversionError, VERSION } from './zmx2seq.js';
+import { convertSeqBytes, encodeZmx, VERSION as SEQ_VERSION } from './seq2zmx.js';
 import { makeZip } from './zip.js';
 
 const $ = sel => document.querySelector(sel);
 const list = $('#list');
-$('#ver').textContent = VERSION;
+$('#ver').textContent = `zmx2seq ${VERSION} · seq2zmx ${SEQ_VERSION}`;
+
+// the two directions, picked by file extension
+const DIRECTIONS = {
+  zmx: {
+    to: 'seq',
+    convert: (bytes, opts) => convertBytes(bytes, opts),
+    encode: res => encodeText(res.seq, 'gbk'),
+    notesAt: '已写在 .seq 开头的注释里',
+  },
+  seq: {
+    to: 'zmx',
+    convert: (bytes, opts) => convertSeqBytes(bytes, opts),
+    encode: res => encodeZmx(res.zmx),
+    notesAt: '已写进 .zmx 的备注（NOTE）',
+  },
+};
+const extOf = name => (name.match(/\.(zmx|seq)$/i) || [])[1]?.toLowerCase();
+const stem = name => name.replace(/\.[^.]*$/, '');
 
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -41,7 +60,7 @@ const glassReady = (async () => {
 
 // ------------------------------------------------------------------ saving
 // Inside a claude.ai artifact the page cannot start downloads itself; the viewer's
-// `downloads` capability takes .zip but not .seq, so there the .seq goes out inside a .zip.
+// `downloads` capability takes .zip but not .seq / .zmx, so there the file goes out inside a .zip.
 let viewerDownloads = null;
 if (typeof window.claude?.use === 'function') {
   window.claude.use('downloads').then(ns => { viewerDownloads = ns; }).catch(() => {});
@@ -68,7 +87,7 @@ async function saveBytes(filename, bytes) {
 
 async function saveOne(out) {
   if (!viewerDownloads) { await saveBytes(out.name, out.bytes); return; }
-  const zipName = out.name.replace(/\.seq$/i, '') + '.zip';
+  const zipName = stem(out.name) + '.zip';
   if (await saveBytes(zipName, makeZip([out]))) toast(`已保存 ${zipName}，解压出来就是 ${out.name}`);
 }
 
@@ -77,24 +96,25 @@ async function saveAll(outs) {
   const files = outs.map(o => {
     const n = seen.get(o.name) || 0;
     seen.set(o.name, n + 1);
-    return { name: n ? o.name.replace(/\.seq$/i, `(${n + 1}).seq`) : o.name, bytes: o.bytes };
+    return { name: n ? o.name.replace(/(\.[^.]*)$/, `(${n + 1})$1`) : o.name, bytes: o.bytes };
   });
-  if (await saveBytes('cv2zmx-seq.zip', makeZip(files))) toast(`${files.length} 个 .seq 已打包成 cv2zmx-seq.zip`);
+  if (await saveBytes('cv2zmx.zip', makeZip(files))) toast(`${files.length} 个文件已打包成 cv2zmx.zip`);
 }
 
 // ------------------------------------------------------------------ converting
 async function handle(fileList) {
-  const files = [...fileList].filter(f => /\.zmx$/i.test(f.name));
-  if (!files.length) { toast('请选择 .zmx 文件'); return; }
+  const files = [...fileList].filter(f => extOf(f.name));
+  if (!files.length) { toast('请选择 .zmx 或 .seq 文件'); return; }
   await glassReady;
   const outs = [], rows = [];
   for (const f of files) {
+    const dir = DIRECTIONS[extOf(f.name)];
     const bytes = new Uint8Array(await f.arrayBuffer());
     try {
-      const res = convertBytes(bytes, { glassTable: table, fileName: f.name });
-      const out = { name: f.name.replace(/\.zmx$/i, '') + '.seq', bytes: encodeText(res.seq, 'gbk') };
+      const res = dir.convert(bytes, { glassTable: table, fileName: f.name });
+      const out = { name: `${stem(f.name)}.${dir.to}`, bytes: dir.encode(res) };
       outs.push(out);
-      rows.push(okRow(f.name, out, res));
+      rows.push(okRow(f.name, out, res, dir));
     } catch (e) {
       rows.push(h('li', { class: 'row err' },
         h('div', { class: 'names' }, h('span', { class: 'from' }, f.name)),
@@ -110,17 +130,17 @@ async function handle(fileList) {
   else if (outs.length > 1) await saveAll(outs);
 }
 
-function okRow(zmxName, out, res) {
+function okRow(inName, out, res, dir) {
   const I = res.info;
   const warns = res.warnings.filter(w => w.level === 'warn');
   const facts = `${I.surfaces} 个面 · ${I.configurations} 个结构`;
   const hints = warns.length
     ? h('details', {},
-      h('summary', {}, `${warns.length} 条提示（已写在 .seq 开头的注释里）`),
+      h('summary', {}, `${warns.length} 条提示（${dir.notesAt}）`),
       h('ul', {}, warns.map(w => h('li', {}, w.zh))))
     : '全部转换';
   return h('li', { class: 'row' },
-    h('div', { class: 'names' }, h('span', { class: 'from' }, zmxName), ' → ', h('strong', {}, out.name)),
+    h('div', { class: 'names' }, h('span', { class: 'from' }, inName), ' → ', h('strong', {}, out.name)),
     h('button', { class: 'btn', type: 'button', onclick: () => saveOne(out) }, '下载'),
     h('div', { class: 'sub' }, facts, ' · ', hints));
 }
