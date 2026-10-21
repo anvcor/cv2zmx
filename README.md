@@ -5,7 +5,10 @@
 | 方向 | 工具 | 在哪跑 |
 |---|---|---|
 | CODE V → Zemax `.zmx` | 宏 `CV2ZMX.seq` | CODE V 里，读 LDM 数据库直接写 `.zmx` |
-| Zemax `.zmx` → CODE V `.seq` | `zmx2seq`（网页 / 命令行） | 浏览器，或 Node.js；**网页：<https://anvcor.github.io/cv2zmx/>** |
+| Zemax `.zmx` → CODE V `.seq` | `zmx2seq`（网页 / 命令行） | 浏览器，或 Node.js |
+| CODE V `.seq` → Zemax `.zmx` | `seq2zmx`（网页 / 命令行） | 浏览器，或 Node.js；不用装 CODE V |
+
+**网页：<https://anvcor.github.io/cv2zmx/>** —— 拖进 `.zmx` 出 `.seq`，拖进 `.seq` 出 `.zmx`。
 
 传统流程是 `CODE V → .seq → Zemax 导入`，中间那一步用的是 Zemax 自己写的 `.seq`
 解析器 —— 玻璃牌号、渐晕、变焦（多重结构）、非球面高次项都在那里丢过东西。
@@ -14,7 +17,7 @@
 这套工具跳过中间商：两个方向都**按对方文件的语法逐行写**，换算公式是同一套，
 带不过去的东西逐条报警告，不会无声丢失。
 
-宏已在 CODE V 2026 + OpticStudio 上实测通过，见「已实测」；`zmx2seq` 的验证见「Zemax → CODE V」一节。
+宏已在 CODE V 2026 + OpticStudio 上实测通过，见「已实测」；`zmx2seq`、`seq2zmx` 的验证见各自一节。
 
 ---
 
@@ -27,10 +30,11 @@
 | `make_glass_table.py` | — | 生成上表的脚本，两边玻璃库更新后重跑 |
 | `CV2ZMX_GLASS_UNMATCHED.txt` | — | Zemax 目录里找不到对应牌号的 CODE V 玻璃清单（多为停产牌号） |
 | `web/zmx2seq.js` | ✅ zmx2seq | 转换器本体（Zemax → CODE V），一个没有依赖的 JS 模块，网页和命令行共用 |
-| `web/index.html` `web/app.js` `web/zip.js` | — | 网页界面（拖入即转换） |
-| `tools/zmx2seq.mjs` | — | 命令行入口，可批量转换 |
+| `web/seq2zmx.js` | ✅ seq2zmx | 转换器本体（CODE V `.seq` → Zemax），同上；借用 `zmx2seq.js` 的解码和近轴核对 |
+| `web/index.html` `web/app.js` `web/zip.js` | — | 网页界面（拖入即转换，按扩展名判断方向） |
+| `tools/zmx2seq.mjs` `tools/seq2zmx.mjs` | — | 命令行入口，可批量转换 |
 | `tools/build-site.mjs` `tools/serve.mjs` | — | 组装网页 / 本地预览 |
-| `test/` | — | 自动测试和测试样本（手写的 `.zmx`，不是设计数据） |
+| `test/` | — | 自动测试和测试样本（手写的 `.zmx` / `.seq`，不是设计数据） |
 | `.github/workflows/pages.yml` | — | 每次推送跑测试；推到 `main` 时自动发布网页 |
 
 宏运行时只要前两个文件。
@@ -246,20 +250,22 @@ OUT         = r"...\CV2ZMX_GLASS.DAT"
 - `ENVD 22 1 0` —— CODE V 的参考温度默认就是 22 °C（LensSystemSetupRM p.864），
   不是笔误；Zemax 默认 20 °C，这里如实搬运
 
-## Zemax → CODE V：zmx2seq
+## 网页（两个方向）
 
-### 网页
+**<https://anvcor.github.io/cv2zmx/>**：把 `.zmx` 拖进去，自动下载 `.seq`；把 `.seq` 拖进去，自动下载 `.zmx`。
+一次拖多个（两种可以混着）就打包成一个 `.zip`。转换全部在浏览器本地完成，文件不上传。
+网页不设选项，一律用默认值；要改选项用命令行。
 
-**<https://anvcor.github.io/cv2zmx/>**：把 `.zmx` 拖进去，自动下载 `.seq`；一次拖多个就打包成一个 `.zip`。
-转换全部在浏览器本地完成，文件不上传。网页不设选项，一律用下面的默认值；要改选项用命令行。
-
-转不过去、需要核对的地方，网页上只显示条数（点开能看），同样的内容写在 `.seq` 开头的 `!` 注释里，
-注释里还有每个结构的近轴 EFL / BFL，拿到 CODE V 里一比就知道有没有转错。
+转不过去、需要核对的地方，网页上只显示条数（点开能看）。同样的内容写在输出文件里：
+`.seq` 写在开头的 `!` 注释里（还有每个结构的近轴 EFL / BFL），`.zmx` 写在 `NOTE` 行里（还有每个结构的近轴 EFL），
+拿到目标软件里一比就知道有没有转错。
 
 网页的发布是自动的：`.github/workflows/pages.yml` 每次推送都跑测试，推到 `main` 时组装网页并发布。
 **第一次要在仓库里开一下**：Settings → Pages → Build and deployment → Source 选 **GitHub Actions**。
 
 本地预览：`npm run serve`，打开 <http://localhost:8080/>。
+
+## Zemax → CODE V：zmx2seq
 
 ### 命令行
 
@@ -330,7 +336,7 @@ node tools/zmx2seq.mjs lens.zmx -o E:\work\lens.seq --offset model
 
 ### 已验证
 
-- `npm test`：19 项自动测试。样本有宏导出格式的 3 档变焦、OpticStudio 格式的对焦镜头（近轴工作 F/#、
+- `npm test`：zmx2seq 17 项自动测试（全部测试共 35 项）。样本有宏导出格式的 3 档变焦、OpticStudio 格式的对焦镜头（近轴工作 F/#、
   位置求解、Offset / 模型玻璃、UTF-16 编码）、特殊面型（SPS ODD、坐标断点、反射镜、DOE、口径），
   旧版没有 `TYPE` 行的文件，以及 GBK 中文标题。
 - **往返**：变焦样本 → zmx2seq → `seq2zmx.py`（另一套独立写的 CODE V `.seq` → `.zmx` 脚本）→ 与原 `.zmx` 比对，
@@ -342,6 +348,84 @@ node tools/zmx2seq.mjs lens.zmx -o E:\work\lens.seq --offset model
 **还没在 CODE V 里打开验证过。** 第一次用的时候请拿一个熟悉的镜头试一下：
 `.seq` 头部注释里有每个结构的 EFL / BFL，和 CODE V 的一阶数据直接对；再看一眼多重结构和渐晕。
 
+## CODE V → Zemax（不用 CODE V）：seq2zmx
+
+手上只有 `.seq`、没有 CODE V 时用它；**装了 CODE V 的话优先用宏**：宏读的是 CODE V 算好的数据库
+（求解、拾取都已经算成数值，私有玻璃、各种面型 CODE V 自己认得），seq2zmx 只能读文件里写了什么。
+
+能读的 `.seq`：CODE V 保存出来的镜头文件（开头是 `RDM;LEN`），手写的，或者 zmx2seq 写出来的。
+宏文件（比如 `CV2ZMX.seq` 本身）不是镜头，会直接提示。写出的 `.zmx` 和宏写的版式相同，
+纯 ASCII；标题里有中文时是 UTF-16LE 带 BOM（OpticStudio 自己存盘也是这样）。
+
+### 命令行
+
+```
+node tools/seq2zmx.mjs lens.seq                         # 写出同目录的 lens.zmx
+node tools/seq2zmx.mjs *.seq -d out                     # 批量
+node tools/seq2zmx.mjs lens.seq -o E:\work\lens.zmx --glass my_glass.dat
+```
+
+没有别的选项。每个文件会打印面数、结构数、每个结构的近轴 EFL / BFL 和全部警告。
+
+### 换算（zmx2seq 的逆运算）
+
+- **读法**：`;` 分隔多条命令，`&` 续行，`!` 注释；`S5`、`F2`、`W1`、`Z3` 等限定词都认。
+  没有 `RDM` 时按 CODE V 的默认读**曲率**，`RDM` / `RDM Y` 读半径。
+- **渐晕**：`VCY = (VUY + VLY)/2`、`VDY = (VLY − VUY)/2`，X 方向同理。
+- **孔径**：`EPD` → `ENPD`；`NAO` → `OBNA`；`NA` → 工作 F/# = 1/(2NA)；
+  `FNO` → `FNUM v 1`（近轴工作 F/#，和 CODE V 的 FNO 是同一个定义）。有限共轭时按
+  `PWFN = √(FNO² − (β/2)²)` 换算，两边入瞳相同（β 由近轴追迹得到）。
+- **视场**：`XAN YAN` / `XOB YOB` / `XIM YIM` / `XRI YRI` → `FTYP 0/1/2/3`。
+- **波长** nm → µm，`WTW` → 权重，`REF` → `PWAV`（没写 `REF` 时取第 1 个波长）；`TEM` `PRE` → `ENVD`（没写时 22 °C、1 atm）。
+- **面型**：`CON` + `K` → `STANDARD` + `CONI`；`ASP` `A…G` → `EVENASPH` `PARM 2…8`，用到 `H`、`J` 时 → `XASPHERE`；
+  `SPS ODD` → `XASPHERE`（只有偶次项）或 `XOSPHERE`；`DIF DOE` → `BINARY_2`（`XDAT 2+j = 2π/λ0 · Cj`，λ0 取 `HWL`）；
+  只有偏心/倾斜、没有曲率和材料变化的哑面 → `COORDBRK`；`REFL` → `MIRROR`。
+- **玻璃**：`牌号_厂家` 经 `CV2ZMX_GLASS.DAT` 查成 Zemax 牌号和目录（`DQK3L_CDGM` → `D-QK3L`，目录自动加进 `GCAT`）；
+  没写厂家时几家都有就优先 SCHOTT；模型玻璃 `516800.6417` / `1.5168:64.17` → `___BLANK` 1.5168 / 64.17；
+  文件里 `PRV` 定义的折射率表 → 拟合成模型玻璃 nd / vd。
+- **口径**：`CIR` → 固定半口径 + `CLAP`，`CIR OBS` → `OBSC`，`ADX ADY` → `OBDC`。
+- **位置求解**：`THI Sk OAL Sj..k+1 len` → 面 k 的 `TOLE j len`，该面不写多重结构厚度。
+- **多重结构**：`ZOO n` → `MNUM n`；`TIT Zk` → `LTTL`；`ZOO THI / CUY / RDY / K / A…J / CIR / XDE…` →
+  `THIC`（`THC 0` 的标成变量）`/ CRVT / CONN / PRAM 或 EDVA / SDIA / PRAM`；`ZOO EPD / FNO / NAO` → `APER`；
+  `ZOO YAN… / WTF / VUY…` → `YFIE XFIE FLWT FVDY FVCY FVDX FVCX`；`ZOO WL / WTW / REF / TEM / PRE` →
+  `WAVE WLWT PWAV TEMP PRES`。只写各结构确实不同的行。`CIR` 随结构变化时 `CLAP` 取最大值，
+  免得某个结构被提前挡光。
+- **和宏写的 `.zmx` 不同的两处**：孔径是 `FNUM v 1`（宏写 `FNUM v 0`，像方 F/#，有限共轭时会差一点）；
+  光线瞄准开成实际光线瞄准 `RAIM 0 2`（CODE V 本来就按实际光线对准光阑，宏写的是关闭）。
+
+### 带不过去的东西
+
+每一条都会报警告，并写进 `.zmx` 的 `NOTE`：
+
+- 不在哑面上的偏心/倾斜，`DAR` `BEN` `REV`
+- 矩形、椭圆口径，`CIR HOL`（中心孔）
+- `ZOO GLA`（玻璃随结构变化）等没有 Zemax 写法的多重结构项
+- 映射表里没有的玻璃：按 CODE V 名字写出（去掉 `_厂家`），Zemax 打开会标成未知玻璃
+- 用公式定义的私有玻璃（只认折射率表）
+- `SPS` 里 `ODD` 以外的特殊面、`HCT` 不是 `R` 的衍射面
+- 拾取（`PIK`）和 OAL 以外的求解（比如 `PIM`）按文件里的当前值写出，不联动；公差、面上的优化变量（`CCY` `THC`）不转换
+
+### 已验证
+
+- `npm test`：seq2zmx 16 项自动测试。样本有按 CODE V 2026 导出格式手写的 3 档变焦（`&` 续行、`!` 注释、
+  OAL 求解、H/J 高次非球面、CDGM / HOYA 牌号、模型玻璃、变焦渐晕），私有玻璃、DOE、坐标断点、反射镜、
+  有限共轭 F 数、中文标题等。
+- **往返**：三个 `.zmx` 测试样本 → zmx2seq → seq2zmx → 与原文件比对：每个面 4 个高度的矢高、厚度、光阑、玻璃、
+  通光口径、位置求解，视场、渐晕、波长、权重（按比例）、孔径，以及每一条多重结构数据全部一致。
+  例外只有设计如此的几处：无限远时像方 F/# 变成同值的近轴工作 F/#、随结构变化的 `CLAP` 取最大值、
+  映射表里没有的玻璃、环形面（zmx2seq 那一步就只写了基础曲率）。
+- **第三方读取**：rayoptics 自带的 29 个 CODE V `.seq` 样本全部能转。rayoptics 再分别读原 `.seq` 和转出的 `.zmx`：
+  它能读的 26 个逐面矢高、厚度一致（DOE 面差 1.6e-5 mm，是 rayoptics 不读 Binary 2 的非球面参数）；
+  另外 3 个是 rayoptics 自己读不了 `.zmx`（两个带偏心的反射系统，一个用了它不认识的 OHARA 目录名）。
+- **近轴 EFL**：seq2zmx 写在 `NOTE` 里的 EFL（折射率由 nd/vd 近似）和 rayoptics 直接读 `.seq` 算的，
+  玻璃都查得到的样本相差 0.3% 以内（例如 13.104 / 13.106、100.004 / 100.004；反射系统两边的正负号约定相反）。不一样的三个：
+  DOE 样本（rayoptics 不算衍射面的光焦度，它给的值和去掉 DOE 的版本一样）；
+  `achroMangin`（老牌号 SK19、KZFS4 不在映射表里，已报警告）；
+  `CODV_65564`（rayoptics 1.4497，按 nd 手算 1.4989，和 seq2zmx 相同）。
+
+**还没在 OpticStudio 里打开验证过。** 版式照搬已经实测过的宏，但第一次用请拿一个熟悉的镜头试一下：
+`.zmx` 的 `NOTE` 里有每个结构的近轴 EFL，和 OpticStudio 的 Prescription Data 直接对；再看一眼多重结构和渐晕。
+
 ## 文件编码
 
 `CV2ZMX.seq` 是 **GBK + CRLF**（注释里有中文）。用别的编辑器改完记得保持原编码，
@@ -349,4 +433,5 @@ node tools/zmx2seq.mjs lens.zmx -o E:\work\lens.seq --offset model
 每行五个空格分隔的字段，**不能有注释行或表头** —— 宏用无格式 `REA` 按空格切字段读它。
 
 `web/`、`tools/`、`test/` 下的文件是 UTF-8 + LF（测试样本 `.zmx` 是 CRLF）。zmx2seq 写出的 `.seq` 是 CRLF，
-默认 GBK 编码，纯 ASCII 内容时 GBK 和 UTF-8 完全一样。
+默认 GBK 编码，纯 ASCII 内容时 GBK 和 UTF-8 完全一样。seq2zmx 读 `.seq` 时自动认 GBK / UTF-8 / UTF-16，
+写出的 `.zmx` 是 CRLF，纯 ASCII，有中文时 UTF-16LE 带 BOM。

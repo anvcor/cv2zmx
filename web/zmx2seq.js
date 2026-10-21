@@ -212,14 +212,18 @@ export function parseGlassTable(text) {
     });
   }
   const byZ = new Map(), byNorm = new Map(), zcatVendor = new Map(), vendors = new Set();
+  const byCv = new Map(), byCvName = new Map();       // CODE V → Zemax direction (seq2zmx.js)
   const add = (map, key, r) => { if (!map.has(key)) map.set(key, []); map.get(key).push(r); };
   for (const r of rows) {
     add(byZ, r.zname.toUpperCase(), r);
     add(byNorm, normName(r.zname), r);
     if (!zcatVendor.has(r.zcat.toUpperCase())) zcatVendor.set(r.zcat.toUpperCase(), r.cvCat);
     vendors.add(r.cvCat);
+    if (!byCv.has(r.cv)) byCv.set(r.cv, r);
+    add(byCvName, r.cv.slice(0, r.cv.length - r.cvCat.length - 1), r);
   }
-  return { size: rows.length, byZ, byNorm, zcatVendor, vendors: [...vendors].sort((a, b) => b.length - a.length) };
+  return { size: rows.length, byZ, byNorm, zcatVendor, byCv, byCvName,
+    vendors: [...vendors].sort((a, b) => b.length - a.length) };
 }
 
 function vendorOf(table, zcat) {
